@@ -1,6 +1,6 @@
 export const PokemonCry = ({ cry }) => {
     return (
-        <audio controls>
+        <audio key={cry} controls>
             <source src={cry} type="audio/ogg" />
         </audio>
     );
