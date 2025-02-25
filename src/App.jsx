@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PokemonCry } from './components/PokemonCry'
 import './App.css'
 
 export function App(){
@@ -7,11 +8,7 @@ export function App(){
     const [imageUrl, setImageUrl] = useState()
     const [cry, setCry] = useState()
 
-    const reloadPage = async() => {
-        location.reload()
-    }
-    
-    useEffect(() => {
+    const getRandomPokemon = async() => {
         const pokemon_id = Math.floor(Math.random() * 151) + 1;
         fetch(`https://pokeapi.co/api/v2/pokemon/${pokemon_id}`)
             .then(res => res.json())
@@ -21,6 +18,10 @@ export function App(){
                 setImageUrl(data.sprites.front_default)
                 setCry(data.cries.latest)
             })
+    }
+    
+    useEffect(() => {
+        getRandomPokemon()
     },[])
 
     return (
@@ -30,14 +31,9 @@ export function App(){
                 {index && <p>{index}</p>}
                 {imageUrl && <img src={imageUrl} alt={`Front image of ${pokemon}`} />}
                 {pokemon && <p>{pokemon}</p>}
-                {
-                    cry && 
-                    <audio controls>
-                        <source src={cry} type="audio/ogg"/>
-                    </audio>
-                }
+                {cry && <PokemonCry cry={cry} />}
             </section>
-            <button onClick={reloadPage}>Get another Pokémon</button>
+            <button onClick={getRandomPokemon}>Get another Pokémon</button>
         </main>
     )
 }
