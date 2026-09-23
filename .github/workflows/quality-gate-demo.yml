@@ -3,8 +3,7 @@ name: Quality Gate Demo
 on:
   pull_request:
     branches:
-      - UAT
-      - main
+      - master
     types:
       - opened
       - synchronize
@@ -14,7 +13,8 @@ permissions:
   contents: read
 
 env:
-  # Cambiar a "false" para simular un Quality Gate fallido
+  # true  = simula Quality Gate correcto
+  # false = simula Quality Gate fallido
   QUALITY_GATE_OK: "true"
 
 jobs:
