@@ -1,0 +1,42 @@
+name: Quality Gate Demo
+
+on:
+  pull_request:
+    branches:
+      - UAT
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+env:
+  # Cambiar a "false" para simular un Quality Gate fallido
+  QUALITY_GATE_OK: "true"
+
+jobs:
+  quality-gate:
+    name: SonarQube Quality Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mostrar información del PR
+        run: |
+          echo "PR: #${{ github.event.pull_request.number }}"
+          echo "Origen: ${{ github.event.pull_request.head.ref }}"
+          echo "Destino: ${{ github.event.pull_request.base.ref }}"
+          echo "SHA: ${{ github.event.pull_request.head.sha }}"
+
+      - name: Simular Quality Gate
+        run: |
+          echo "Simulando respuesta de SonarQube..."
+
+          if [ "$QUALITY_GATE_OK" != "true" ]; then
+            echo "::error::Quality Gate NO superado"
+            exit 1
+          fi
+
+          echo "Quality Gate superado correctamente"
