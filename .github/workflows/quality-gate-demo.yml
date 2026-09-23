@@ -15,7 +15,7 @@ permissions:
 env:
   # true  = simula Quality Gate correcto
   # false = simula Quality Gate fallido
-  QUALITY_GATE_OK: "true"
+  QUALITY_GATE_OK: "false"
 
 jobs:
   quality-gate:
