@@ -1,0 +1,181 @@
+name: Validar y fusionar PR - Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número del Pull Request"
+        required: true
+        type: number
+
+      ejecutar_merge:
+        description: "Ejecutar merge real al finalizar"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+env:
+  # Cambiar a "false" para simular fallo de las acciones previas
+  ACCIONES_OK: "true"
+
+jobs:
+  premerge:
+    name: Premerge Demo
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener información del PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          echo "Consultando PR #$PR_NUMBER..."
+
+          PR_DATA=$(gh api \
+            "repos/${{ github.repository }}/pulls/$PR_NUMBER")
+
+          STATE=$(echo "$PR_DATA" | jq -r '.state')
+          DRAFT=$(echo "$PR_DATA" | jq -r '.draft')
+          BASE=$(echo "$PR_DATA" | jq -r '.base.ref')
+          HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+          MERGEABLE=$(echo "$PR_DATA" | jq -r '.mergeable')
+
+          echo "state=$STATE" >> "$GITHUB_OUTPUT"
+          echo "draft=$DRAFT" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "mergeable=$MERGEABLE" >> "$GITHUB_OUTPUT"
+
+          echo "Estado: $STATE"
+          echo "Draft: $DRAFT"
+          echo "Destino: $BASE"
+          echo "SHA: $HEAD_SHA"
+          echo "Mergeable: $MERGEABLE"
+
+      - name: Validar PR
+        env:
+          STATE: ${{ steps.pr.outputs.state }}
+          DRAFT: ${{ steps.pr.outputs.draft }}
+          BASE: ${{ steps.pr.outputs.base }}
+        run: |
+          if [ "$STATE" != "open" ]; then
+            echo "::error::El PR no está abierto"
+            exit 1
+          fi
+
+          if [ "$DRAFT" = "true" ]; then
+            echo "::error::El PR es un draft"
+            exit 1
+          fi
+
+          if [ "$BASE" != "UAT" ] && [ "$BASE" != "main" ]; then
+            echo "::error::La rama destino debe ser UAT o main"
+            exit 1
+          fi
+
+          echo "PR válido"
+
+      - name: Comprobar Quality Gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          echo "Comprobando Quality Gate para $HEAD_SHA..."
+
+          CONCLUSION=$(gh api \
+            "repos/${{ github.repository }}/commits/$HEAD_SHA/check-runs" \
+            --jq '
+              [.check_runs[]
+                | select(.name == "SonarQube Quality Gate")]
+              | sort_by(.started_at)
+              | last
+              | .conclusion
+            ')
+
+          echo "Resultado encontrado: $CONCLUSION"
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::El Quality Gate no está superado para este commit"
+            exit 1
+          fi
+
+          echo "Quality Gate correcto"
+
+      - name: Simular acciones previas al merge
+        env:
+          TARGET_BRANCH: ${{ steps.pr.outputs.base }}
+        run: |
+          echo "================================"
+          echo "SIMULACIÓN PRE-MERGE"
+          echo "================================"
+          echo "Entorno: $TARGET_BRANCH"
+          echo "PR: #${{ inputs.pr_number }}"
+          echo
+          echo "Simulando despliegue..."
+          sleep 2
+          echo "Simulando validaciones..."
+          sleep 2
+
+          if [ "$ACCIONES_OK" != "true" ]; then
+            echo "::error::Las acciones previas al merge han fallado"
+            exit 1
+          fi
+
+          echo "Acciones previas completadas correctamente"
+
+      - name: Comprobar que el PR no ha cambiado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          ORIGINAL_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          CURRENT_SHA=$(gh api \
+            "repos/${{ github.repository }}/pulls/$PR_NUMBER" \
+            --jq '.head.sha')
+
+          echo "SHA inicial: $ORIGINAL_SHA"
+          echo "SHA actual:  $CURRENT_SHA"
+
+          if [ "$CURRENT_SHA" != "$ORIGINAL_SHA" ]; then
+            echo "::error::El PR ha cambiado durante la ejecución"
+            exit 1
+          fi
+
+          echo "El PR no ha cambiado"
+
+      - name: Resultado de la demo
+        if: ${{ !inputs.ejecutar_merge }}
+        run: |
+          echo "================================"
+          echo "VALIDACIÓN COMPLETADA"
+          echo "================================"
+          echo "Quality Gate: OK"
+          echo "Acciones previas: OK"
+          echo "PR sin cambios: OK"
+          echo
+          echo "Merge real desactivado."
+          echo "La prueba ha terminado correctamente."
+
+      - name: Fusionar PR
+        if: ${{ inputs.ejecutar_merge }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          echo "Solicitando merge del PR #$PR_NUMBER..."
+
+          gh api \
+            --method PUT \
+            "repos/${{ github.repository }}/pulls/$PR_NUMBER/merge" \
+            -f merge_method="merge" \
+            -f sha="$EXPECTED_SHA"
+
+          echo "Merge solicitado correctamente"
